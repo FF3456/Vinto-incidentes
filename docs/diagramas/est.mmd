@@ -1,0 +1,7 @@
+stateDiagram-v2
+  [*] --> REPORTADO: Ciudadano registra
+  REPORTADO --> EN_REVISION: Funcionario
+  EN_REVISION --> EN_ATENCION: Funcionario asigna responsable
+  EN_ATENCION --> ATENDIDO: Responsable registra atención
+  ATENDIDO --> CERRADO: Funcionario verifica
+  CERRADO --> [*]

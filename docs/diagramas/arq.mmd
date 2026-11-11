@@ -1,0 +1,34 @@
+flowchart TB
+  subgraph PRES["PRESENTACIÓN · NiceGUI (adaptadores de entrada)"]
+    P1["pages/publicas.py · panel.py · admin.py"]
+    P2["componentes: mapa · detalle · marco"]
+  end
+  subgraph APP["APLICACIÓN · Casos de uso"]
+    U1["RegistrarIncidente · CambiarEstado<br/>AsignarResponsable · RegistrarAtencion"]
+    U2["ListarIncidentes · ConsultarPorCodigo<br/>ObtenerEstadisticas · ObtenerMarcadoresMapa"]
+    U3["Autenticar · GestionarUsuarios · GestionarCategorias"]
+  end
+  subgraph DOM["DOMINIO · Núcleo de negocio (sin dependencias externas)"]
+    D1["Entidades: IncidenteAmbiental · Categoria · Usuario · Responsable"]
+    D2["Objetos de valor: Ubicacion · EstadoIncidente · Evidencia · Prioridad · Rol"]
+    D3["IncidenteFactory + PoliticaCategoria"]
+    D4["Política RBAC: Permiso · Actor"]
+    subgraph PORTS["PUERTOS (interfaces)"]
+      PO1["IRepositorioIncidentes / Usuarios / Categorias / Responsables"]
+      PO2["ServicioGeografico"]
+      PO3["AlmacenamientoEvidencias · HasheadorPassword"]
+    end
+  end
+  subgraph INF["INFRAESTRUCTURA · Adaptadores de salida"]
+    I1["SQLAlchemy + SQLite<br/>RepositorioIncidentesSQL ..."]
+    I2["AdaptadorOpenStreetMap<br/>AdaptadorCartoClaro"]
+    I3["AlmacenamientoLocal · HasheadorPBKDF2"]
+    I4["Repositorios en memoria (pruebas)"]
+  end
+  PRES --> APP
+  APP --> DOM
+  I1 -.implementa.-> PO1
+  I4 -.implementa.-> PO1
+  I2 -.implementa.-> PO2
+  I3 -.implementa.-> PO3
+  BOOT["bootstrap.py · raíz de composición"] -.inyecta.-> APP

@@ -1,0 +1,30 @@
+{
+  "capturas": [
+    "01_inicio",
+    "02_login",
+    "03_reporte_paso1_informacion",
+    "04_reporte_paso2_ubicacion_mapa",
+    "05_reporte_paso3_evidencia",
+    "06_reporte_paso4_envio",
+    "07_reporte_enviado_codigo",
+    "08_mis_reportes",
+    "09_rbac_acceso_denegado",
+    "10_seguimiento_publico",
+    "11_bandeja_funcionario",
+    "12_bandeja_filtro_estado",
+    "13_detalle_gestion_caso",
+    "14_asignar_responsable",
+    "15_caso_en_atencion",
+    "16_mapa_incidentes",
+    "17_panel_estadisticas",
+    "18_responsable_asignados",
+    "19_atencion_registrada",
+    "20_mapa_de_trabajo_responsable",
+    "21_caso_cerrado_historial",
+    "22_admin_usuarios",
+    "23_admin_categorias",
+    "24_admin_auditoria"
+  ],
+  "codigo": "VINTO-2026-0013",
+  "errores_js": []
+}

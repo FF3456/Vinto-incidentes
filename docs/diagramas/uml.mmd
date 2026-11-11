@@ -1,0 +1,41 @@
+classDiagram
+  class IncidenteFactory {
+    -dict politicas
+    +registrar_politica(perfil, politica)
+    +crear(categoria, ...) IncidenteAmbiental
+  }
+  class PoliticaCategoria {
+    <<abstract>>
+    +prioridad
+    +plazo_horas
+    +validar(descripcion)
+  }
+  PoliticaCategoria <|-- PoliticaAgua
+  PoliticaCategoria <|-- PoliticaAire
+  PoliticaCategoria <|-- PoliticaResiduos
+  PoliticaCategoria <|-- PoliticaRuido
+  PoliticaCategoria <|-- PoliticaAreasVerdes
+  PoliticaCategoria <|-- PoliticaGenerica
+  IncidenteFactory --> PoliticaCategoria
+  IncidenteFactory ..> IncidenteAmbiental : crea
+  class RegistrarIncidente
+  RegistrarIncidente --> IncidenteFactory
+  RegistrarIncidente --> ServicioGeografico
+  RegistrarIncidente --> IRepositorioIncidentes
+  class ServicioGeografico {
+    <<interface>>
+    +configuracion()
+    +crear_marcador(incidente)
+    +coordenadas_validas(lat, lon)
+    +zona_para(lat, lon)
+  }
+  ServicioGeografico <|.. AdaptadorOpenStreetMap
+  ServicioGeografico <|.. AdaptadorCartoClaro
+  class IRepositorioIncidentes {
+    <<interface>>
+    +guardar()
+    +buscar_por_codigo()
+    +listar(filtro)
+  }
+  IRepositorioIncidentes <|.. RepositorioIncidentesSQL
+  IRepositorioIncidentes <|.. RepositorioIncidentesMemoria
