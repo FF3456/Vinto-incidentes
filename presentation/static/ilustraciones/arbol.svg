@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="Árbol">
+<circle cx="200" cy="215" r="170" fill="#00ffff" opacity=".18"/>
+<ellipse cx="200" cy="360" rx="140" ry="22" fill="#008080" opacity=".35"/>
+<path d="M188 360 C190 300 186 270 176 236 L224 236 C214 270 210 300 212 360 Z" fill="#004c4c"/>
+<path d="M200 300 C 170 280 150 262 138 240" stroke="#004c4c" stroke-width="9" fill="none" stroke-linecap="round"/>
+<path d="M204 290 C 232 272 250 256 262 234" stroke="#004c4c" stroke-width="9" fill="none" stroke-linecap="round"/>
+<circle cx="200" cy="140" r="78" fill="#008080"/>
+<circle cx="135" cy="190" r="62" fill="#006666"/>
+<circle cx="268" cy="190" r="64" fill="#006666"/>
+<circle cx="200" cy="205" r="72" fill="#008080"/>
+<circle cx="160" cy="110" r="50" fill="#009999"/>
+<circle cx="245" cy="112" r="52" fill="#009999"/>
+<circle cx="200" cy="95" r="46" fill="#00b3b3"/>
+<circle cx="175" cy="120" r="18" fill="#00e6e6" opacity=".35"/>
+<circle cx="228" cy="150" r="14" fill="#00e6e6" opacity=".35"/>
+<circle cx="150" cy="180" r="12" fill="#00e6e6" opacity=".35"/>
+<circle cx="250" cy="200" r="16" fill="#00e6e6" opacity=".35"/>
+</svg>

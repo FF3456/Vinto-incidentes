@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from nicegui import app, ui
 
@@ -13,6 +14,7 @@ from presentation.pages import admin, panel, publicas  # noqa: F401  (importar r
 def iniciar(contenedor: Contenedor, puerto: int = 8080, recargar: bool = False) -> None:
     contexto.fijar(contenedor)
     app.add_static_files("/evidencias", str(contenedor.carpeta_evidencias))
+    app.add_static_files("/ilustraciones", str(Path(__file__).parent / "static" / "ilustraciones"))
     ui.run(title="SIRIMA Vinto", port=puerto, reload=recargar, show=False, language="es",
            storage_secret=os.getenv("VINTO_SECRETO", "cambiar-este-secreto-en-produccion"),
            favicon="🌿")
