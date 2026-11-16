@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import io
 
 from nicegui import ui
@@ -9,8 +10,8 @@ from nicegui import ui
 from domain.entities.categoria import PERFILES_VALIDOS
 from domain.exceptions import DominioError
 from domain.value_objects.rol import Rol
-from presentation.componentes.estilos import fmt_fecha, kpi
-from presentation.componentes.marco import marco
+from presentation.componentes.estilos import encabezado, kpi_tira, vacio
+from presentation.componentes.marco import clave_rol, marco
 from presentation.contexto import c
 from presentation.guardas import requerir
 from presentation.sesion import notificar_error
@@ -37,6 +38,10 @@ _SLOT_ACTIVO = """<q-td :props="props"><span :class="'chip ' + (props.row.activo
 
 
 # ----------------------------------------------------------------- USUARIOS
+def _iniciales(nombre: str) -> str:
+    return html.escape("".join(p[0] for p in (nombre or "").split()[:2]).upper() or "?")
+
+
 @ui.page("/admin/usuarios")
 def usuarios() -> None:
     actor = requerir("/admin/usuarios", *ADMIN)
@@ -44,43 +49,51 @@ def usuarios() -> None:
         return
     cont = c()
     roles = {r.value: r.etiqueta for r in Rol}
+    filtro = {"rol": ""}
     with marco("Gestión de usuarios", "/admin/usuarios", actor):
-        with ui.row().classes("w-full items-center justify-between"):
-            with ui.column().classes("gap-0"):
-                ui.html('<h1 class="h">Gestión de usuarios</h1>')
-                ui.label("Cuentas, roles y estado de acceso (RBAC).").classes("sub")
+        acciones = encabezado("Gestión de usuarios", "Cuentas, roles y estado de acceso (RBAC).", clave_rol(actor))
+        with acciones:
+            ui.toggle({"": "Todos"} | {k: v for k, v in roles.items()}, value="",
+                      on_change=lambda e: (filtro.update(rol=e.value), tabla.refresh())) \
+                .props("no-caps unelevated toggle-color=cyan-13 toggle-text-color=teal-10 color=teal-10 text-color=white")
             ui.button("Nuevo usuario", icon="person_add", on_click=lambda: dialogo_nuevo()) \
                 .props("unelevated no-caps color=primary")
 
         @ui.refreshable
         def tabla() -> None:
             lista = cont.gestionar_usuarios.listar(actor)
-            with ui.row().classes("w-full gap-4"):
-                kpi("Usuarios", str(len(lista)), "#2d6a4f", "group")
-                kpi("Activos", str(sum(u.activo for u in lista)), "#059669", "verified_user")
-                kpi("Funcionarios y responsables",
-                    str(sum(u.rol in (Rol.FUNCIONARIO, Rol.RESPONSABLE) for u in lista)), "#2563eb", "badge")
-            filas = [{"id": u.id, "nombre": u.nombre, "correo": u.correo, "rol": roles[u.rol.value],
-                      "rol_key": u.rol.value, "activo": u.activo} for u in lista]
-            cols = [{"name": "nombre", "label": "Nombre", "field": "nombre", "align": "left"},
-                    {"name": "correo", "label": "Correo", "field": "correo", "align": "left"},
-                    {"name": "rol", "label": "Rol", "field": "rol", "align": "left"},
-                    {"name": "activo", "label": "Estado", "field": "activo", "align": "left"},
-                    {"name": "acciones", "label": "", "field": "id"}]
-            with ui.card().classes("tarjeta w-full p-3").props("flat"):
-                t = ui.table(columns=cols, rows=filas, row_key="id", pagination=10).classes("w-full").props("flat")
-                t.add_slot("body-cell-activo", _SLOT_ACTIVO)
-                t.add_slot("body-cell-acciones", _SLOT_ACCIONES)
-                t.on("alternar", lambda e: alternar(e.args))
-                t.on("editar", lambda e: dialogo_rol(e.args))
+            kpi_tira([("Usuarios", str(len(lista)), "#006666", "group"),
+                      ("Activos", str(sum(u.activo for u in lista)), "#008080", "verified_user"),
+                      ("Funcionarios y responsables",
+                       str(sum(u.rol in (Rol.FUNCIONARIO, Rol.RESPONSABLE) for u in lista)), "#004c4c", "badge")])
+            visibles = [u for u in lista if not filtro["rol"] or u.rol.value == filtro["rol"]]
+            if not visibles:
+                with ui.card().classes("tarjeta w-full").props("flat"):
+                    vacio("No hay usuarios con este rol")
+                return
+            with ui.element("div").classes("grid-auto"):
+                for u in visibles:
+                    fila = {"id": u.id, "nombre": u.nombre, "correo": u.correo, "rol": roles[u.rol.value],
+                            "rol_key": u.rol.value, "activo": u.activo}
+                    with ui.card().classes("tarjeta usuario-card" + ("" if u.activo else " inactivo")).props("flat"):
+                        with ui.row().classes("items-center gap-3 no-wrap"):
+                            ui.html(f'<div class="avatar" aria-hidden="true">{_iniciales(u.nombre)}</div>')
+                            with ui.column().classes("gap-0 min-w-0"):
+                                ui.label(u.nombre).classes("font-bold")
+                                ui.label(u.correo).classes("mono").style("word-break:break-all")
+                        with ui.row().classes("items-center justify-between w-full"):
+                            ui.label(roles[u.rol.value]).classes(f"chip chip-rol-{u.rol.value}")
+                            ui.switch("Activo", value=u.activo, on_change=lambda _e, f=fila: alternar(f)).props("dense")
+                        ui.button("Cambiar rol", icon="edit", on_click=lambda f=fila: dialogo_rol(f)) \
+                            .props("flat no-caps dense align=left")
 
         def alternar(fila: dict) -> None:
             try:
                 cont.gestionar_usuarios.cambiar_activo(actor, fila["id"], not fila["activo"])
                 ui.notify("Estado de la cuenta actualizado", type="positive")
-                tabla.refresh()
             except DominioError as e:
                 notificar_error(e)
+            tabla.refresh()
 
         def dialogo_rol(fila: dict) -> None:
             with ui.dialog() as dlg, ui.card().classes("p-5 gap-3 w-[380px]"):
@@ -102,7 +115,7 @@ def usuarios() -> None:
 
         def dialogo_nuevo() -> None:
             with ui.dialog() as dlg, ui.card().classes("p-5 gap-3 w-[420px]"):
-                ui.label("Nuevo usuario").classes("text-lg font-extrabold")
+                ui.label("Nuevo usuario").classes("seccion-titulo")
                 nombre = ui.input("Nombre completo").props("outlined dense").classes("w-full")
                 correo = ui.input("Correo electrónico").props("outlined dense").classes("w-full")
                 clave = ui.input("Contraseña inicial", password=True).props("outlined dense").classes("w-full")
@@ -127,6 +140,10 @@ def usuarios() -> None:
 
 
 # --------------------------------------------------------------- CATEGORÍAS
+_ICONO_PERFIL = {"RESIDUOS": "delete_sweep", "AGUA": "water_drop", "AIRE": "air", "RUIDO": "volume_up",
+                 "AREAS_VERDES": "park", "GENERICO": "eco"}
+
+
 @ui.page("/admin/categorias")
 def categorias() -> None:
     actor = requerir("/admin/categorias", *ADMIN)
@@ -134,40 +151,43 @@ def categorias() -> None:
         return
     cont = c()
     with marco("Categorías", "/admin/categorias", actor):
-        with ui.row().classes("w-full items-center justify-between"):
-            with ui.column().classes("gap-0"):
-                ui.html('<h1 class="h">Configuración de categorías</h1>')
-                ui.label("Catálogo dinámico: las categorías se desactivan, nunca se eliminan (conserva el histórico).").classes("sub")
-            ui.button("Nueva categoría", icon="add", on_click=lambda: dialogo(None)) \
-                .props("unelevated no-caps color=primary")
+        acciones = encabezado("Configuración de categorías",
+                              "Catálogo dinámico: las categorías se desactivan, nunca se eliminan (conserva el histórico).",
+                              clave_rol(actor))
+        with acciones:
+            ui.button("Nueva categoría", icon="add", on_click=lambda: dialogo(None)).props("unelevated no-caps color=primary")
 
         @ui.refreshable
         def tabla() -> None:
             lista = cont.listar_categorias.ejecutar(solo_activas=False)
-            filas = [{"id": x.id, "nombre": x.nombre, "descripcion": x.descripcion,
-                      "perfil": PERFILES[x.perfil], "perfil_key": x.perfil, "activo": x.activa} for x in lista]
-            cols = [{"name": "nombre", "label": "Categoría", "field": "nombre", "align": "left"},
-                    {"name": "descripcion", "label": "Descripción", "field": "descripcion", "align": "left"},
-                    {"name": "perfil", "label": "Política de atención", "field": "perfil", "align": "left"},
-                    {"name": "activo", "label": "Estado", "field": "activo", "align": "left"},
-                    {"name": "acciones", "label": "", "field": "id"}]
-            with ui.card().classes("tarjeta w-full p-3").props("flat"):
-                t = ui.table(columns=cols, rows=filas, row_key="id", pagination=12).classes("w-full").props("flat")
-                t.add_slot("body-cell-activo", _SLOT_ACTIVO)
-                t.add_slot("body-cell-acciones", _SLOT_ACCIONES)
-                t.on("alternar", lambda e: alternar(e.args))
-                t.on("editar", lambda e: dialogo(e.args))
+            kpi_tira([("Categorías", str(len(lista)), "#006666", "category"),
+                      ("Activas", str(sum(1 for x in lista if x.activa)), "#008080", "check_circle"),
+                      ("Inactivas", str(sum(1 for x in lista if not x.activa)), "#004c4c", "block")])
+            with ui.element("div").classes("grid-auto"):
+                for x in lista:
+                    fila = {"id": x.id, "nombre": x.nombre, "descripcion": x.descripcion,
+                            "perfil": PERFILES[x.perfil], "perfil_key": x.perfil, "activo": x.activa}
+                    with ui.card().classes("tarjeta cat-card" + ("" if x.activa else " usuario-card inactivo")).props("flat"):
+                        with ui.row().classes("items-center justify-between w-full no-wrap"):
+                            with ui.element("div").classes("ic"):
+                                ui.icon(_ICONO_PERFIL.get(x.perfil, "eco")).props('aria-hidden="true"')
+                            ui.switch("Activa", value=x.activa, on_change=lambda _e, f=fila: alternar(f)).props("dense")
+                        ui.label(x.nombre).classes("font-bold text-base")
+                        ui.label(x.descripcion).classes("sub")
+                        ui.label(PERFILES[x.perfil]).classes("chip chip-MEDIA").style("white-space:normal")
+                        ui.button("Editar", icon="edit", on_click=lambda f=fila: dialogo(f)) \
+                            .props("flat no-caps dense align=left")
 
         def alternar(fila: dict) -> None:
             try:
                 cont.gestionar_categorias.cambiar_activa(actor, fila["id"], not fila["activo"])
-                tabla.refresh()
             except DominioError as e:
                 notificar_error(e)
+            tabla.refresh()
 
         def dialogo(fila: dict | None) -> None:
             with ui.dialog() as dlg, ui.card().classes("p-5 gap-3 w-[460px] max-w-[95vw]"):
-                ui.label("Editar categoría" if fila else "Nueva categoría").classes("text-lg font-extrabold")
+                ui.label("Editar categoría" if fila else "Nueva categoría").classes("seccion-titulo")
                 nombre = ui.input("Nombre", value=fila["nombre"] if fila else "").props("outlined dense").classes("w-full")
                 desc = ui.textarea("Descripción", value=fila["descripcion"] if fila else "").props("outlined dense autogrow").classes("w-full")
                 perfil = ui.select(PERFILES, value=fila["perfil_key"] if fila else "GENERICO",
@@ -193,37 +213,61 @@ def categorias() -> None:
 
 
 # ---------------------------------------------------------------- AUDITORÍA
+_MAX_EVENTOS = 150
+
+
 @ui.page("/admin/auditoria")
 def auditoria() -> None:
     actor = requerir("/admin/auditoria", *ADMIN)
     if not actor:
         return
     registros = c().consultar_auditoria.ejecutar(actor)
+    termino = {"v": ""}
     with marco("Auditoría", "/admin/auditoria", actor):
-        with ui.row().classes("w-full items-center justify-between"):
-            with ui.column().classes("gap-0"):
-                ui.html('<h1 class="h">Auditoría del sistema</h1>')
-                ui.label("Registro de acciones realizadas en la plataforma.").classes("sub")
+        encabezado("Auditoría del sistema", "Registro de acciones realizadas en la plataforma.", clave_rol(actor))
 
-            def exportar() -> None:
-                buf = io.StringIO()
-                w = csv.writer(buf)
-                w.writerow(["fecha", "usuario", "accion", "recurso", "detalle"])
-                for r in registros:
-                    w.writerow([r.fecha.isoformat(sep=" ", timespec="seconds"), r.usuario_nombre,
-                                r.accion, r.recurso, r.detalle])
-                ui.download.content(buf.getvalue().encode("utf-8-sig"), "auditoria_sirima.csv", "text/csv")
-            ui.button("Exportar CSV", icon="download", on_click=exportar).props("flat no-caps color=primary")
+        def exportar() -> None:
+            buf = io.StringIO()
+            w = csv.writer(buf)
+            w.writerow(["fecha", "usuario", "accion", "recurso", "detalle"])
+            for r in registros:
+                w.writerow([r.fecha.isoformat(sep=" ", timespec="seconds"), r.usuario_nombre,
+                            r.accion, r.recurso, r.detalle])
+            ui.download.content(buf.getvalue().encode("utf-8-sig"), "auditoria_sirima.csv", "text/csv")
 
-        with ui.row().classes("w-full gap-4"):
-            kpi("Acciones registradas", str(len(registros)), "#2d6a4f", "history")
-            kpi("Usuarios distintos", str(len({r.usuario_nombre for r in registros})), "#2563eb", "group")
-        filas = [{"id": r.id, "fecha": fmt_fecha(r.fecha), "usuario": r.usuario_nombre, "accion": r.accion,
-                  "recurso": r.recurso, "detalle": r.detalle} for r in registros]
-        cols = [{"name": k, "label": l, "field": k, "align": "left", "sortable": True} for k, l in
-                [("fecha", "Fecha/hora"), ("usuario", "Usuario"), ("accion", "Acción"),
-                 ("recurso", "Recurso"), ("detalle", "Detalle")]]
-        with ui.card().classes("tarjeta w-full p-3 gap-2").props("flat"):
-            buscar = ui.input("Buscar por usuario, acción o recurso").props("outlined dense clearable").classes("w-full")
-            t = ui.table(columns=cols, rows=filas, row_key="id", pagination=12).classes("w-full").props("flat")
-            t.bind_filter_from(buscar, "value")
+        with ui.element("div").classes("dos-col"):
+            with ui.column().classes("gap-3 min-w-0 w-full"):
+                @ui.refreshable
+                def linea_tiempo() -> None:
+                    q = termino["v"].strip().lower()
+                    coincidencias = [r for r in registros if not q or q in
+                                     f"{r.usuario_nombre} {r.accion} {r.recurso} {r.detalle}".lower()]
+                    ui.label(f"{len(coincidencias)} registro(s)").classes("sub")
+                    if not coincidencias:
+                        with ui.card().classes("tarjeta w-full").props("flat"):
+                            vacio("Sin registros para esta búsqueda")
+                        return
+                    with ui.element("div").classes("feed"):
+                        dia = None
+                        for r in coincidencias[:_MAX_EVENTOS]:
+                            if r.fecha.date() != dia:
+                                dia = r.fecha.date()
+                                ui.label(dia.strftime("%d/%m/%Y")).classes("dia")
+                            with ui.element("div").classes("ev"):
+                                with ui.row().classes("items-center gap-2"):
+                                    ui.label(r.accion).classes("chip chip-rol-FUNCIONARIO")
+                                    ui.label(r.recurso).classes("mono")
+                                    ui.label(r.fecha.strftime("%H:%M:%S")).classes("hora")
+                                ui.label(f"{r.usuario_nombre} · {r.detalle}").classes("text-sm")
+                    if len(coincidencias) > _MAX_EVENTOS:
+                        ui.label(f"Se muestran los {_MAX_EVENTOS} más recientes. Afine la búsqueda o exporte el CSV completo.").classes("sub")
+                linea_tiempo()
+            with ui.element("aside"):
+                with ui.card().classes("tarjeta aside-ayuda").props("flat"):
+                    ui.label("Buscar en el registro").classes("seccion-titulo")
+                    ui.input("Usuario, acción o recurso", on_change=lambda e: (
+                        termino.update(v=e.value or ""), linea_tiempo.refresh())) \
+                        .props("outlined dense clearable").classes("w-full")
+                    ui.button("Exportar CSV", icon="download", on_click=exportar).props("unelevated no-caps color=primary")
+                kpi_tira([("Acciones registradas", str(len(registros)), "#006666", "history"),
+                          ("Usuarios distintos", str(len({r.usuario_nombre for r in registros})), "#004c4c", "group")])
