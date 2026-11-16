@@ -29,7 +29,7 @@ def _progreso(i: IncidenteAmbiental) -> None:
                 ui.html(f'<div class="c">{"✓" if clase == "hecho" else n + 1}</div>')
                 ui.label(e.etiqueta).classes("text-sm" + (" font-bold" if n == idx else ""))
             if n < len(estados) - 1:
-                ui.element("div").style("width:22px;height:2px;background:#cfe3d7")
+                ui.element("div").style("width:18px;height:2px;background:var(--borde)")
 
 
 def _subida(archivos: list[ArchivoSubido], maximo: int = 3):
@@ -62,8 +62,8 @@ def _acciones(i: IncidenteAmbiental, actor: Actor, al_cambiar: Callable[[], None
     if i.estado == E.CERRADO:
         return
 
-    with ui.card().classes("tarjeta w-full gap-3 p-4").props("flat"):
-        ui.label("Gestión del caso").classes("font-bold")
+    with ui.card().classes("tarjeta w-full gap-3 p-4").props("flat").style("border:2px solid var(--c5)"):
+        ui.label("Gestión del caso").classes("seccion-titulo")
 
         if i.estado == E.REPORTADO and gestiona and puede_transicionar(actor, E.EN_REVISION):
             obs = ui.input("Observación (opcional)").props("outlined dense").classes("w-full")
@@ -108,63 +108,78 @@ def _acciones(i: IncidenteAmbiental, actor: Actor, al_cambiar: Callable[[], None
                 "Caso CERRADO")).props("unelevated no-caps color=primary")
 
 
-def render_detalle(i: IncidenteAmbiental, actor: Actor, al_cambiar: Callable[[], None]) -> None:
+def _dato(etiqueta: str, valor: str) -> None:
+    ui.html(f'<div class="dato"><span>{_esc(etiqueta)}</span><b>{_esc(valor)}</b></div>')
+
+
+def render_detalle(i: IncidenteAmbiental, actor: Actor, al_cambiar: Callable[[], None], panel: bool = False) -> None:
+    """``panel=True``: una columna con la gestión primero (panel lateral del personal).
+    ``panel=False``: dos columnas, historial a la derecha (seguimiento del ciudadano)."""
     cont = c()
-    ahora_vencido = i.esta_vencido(datetime.now())
+    vencido = i.esta_vencido(datetime.now())
     with ui.row().classes("items-center gap-2 w-full flex-wrap"):
         ui.label(i.codigo).classes("mono font-bold text-base")
         chip_estado(i.estado)
         chip_prioridad(i.prioridad)
-        if ahora_vencido:
+        if vencido:
             ui.label("Plazo vencido").classes("chip chip-VENCIDO")
-    ui.label(i.titulo).classes("text-xl font-extrabold")
+    ui.label(i.titulo).classes("text-2xl font-bold").style("font-family:var(--titulos); line-height:1.2")
     _progreso(i)
-    ui.label(i.descripcion).classes("text-sm")
 
-    with ui.grid(columns=2).classes("w-full gap-x-6 gap-y-1 text-sm"):
-        for etiqueta, valor in [
-            ("Categoría", i.categoria_nombre), ("Zona", i.ubicacion.zona or "—"),
-            ("Referencia", i.ubicacion.referencia or "—"),
-            ("Coordenadas", f"{i.ubicacion.latitud:.5f}, {i.ubicacion.longitud:.5f}"),
-            ("Ocurrió", fmt_fecha(i.fecha_incidente)), ("Reportado", fmt_fecha(i.fecha_reporte)),
-            ("Última actualización", fmt_fecha(i.fecha_actualizacion)),
-            ("Plazo de atención", f"{i.plazo_horas} h (hasta {fmt_fecha(i.fecha_limite)})"),
-            ("Responsable", i.responsable_nombre or "Sin asignar"),
-        ]:
-            ui.html(f'<span style="color:#5b7a6a">{etiqueta}:</span> <b>{_esc(valor)}</b>')
-        if actor.rol != Rol.CIUDADANO and (i.contacto_nombre or i.contacto_medio):
-            ui.html(f'<span style="color:#5b7a6a">Contacto:</span> '
-                    f'<b>{_esc(i.contacto_nombre)} {_esc(i.contacto_medio)}</b>')
+    def cuerpo() -> None:
+        ui.label(i.descripcion).classes("text-base")
+        with ui.element("div").classes("detalle-datos"):
+            for etiqueta, valor in [
+                ("Categoría", i.categoria_nombre), ("Zona", i.ubicacion.zona or "—"),
+                ("Referencia", i.ubicacion.referencia or "—"),
+                ("Coordenadas", f"{i.ubicacion.latitud:.5f}, {i.ubicacion.longitud:.5f}"),
+                ("Ocurrió", fmt_fecha(i.fecha_incidente)), ("Reportado", fmt_fecha(i.fecha_reporte)),
+                ("Última actualización", fmt_fecha(i.fecha_actualizacion)),
+                ("Plazo de atención", f"{i.plazo_horas} h (hasta {fmt_fecha(i.fecha_limite)})"),
+                ("Responsable", i.responsable_nombre or "Sin asignar"),
+            ]:
+                _dato(etiqueta, valor)
+            if actor.rol != Rol.CIUDADANO and (i.contacto_nombre or i.contacto_medio):
+                _dato("Contacto", f"{i.contacto_nombre} {i.contacto_medio}".strip())
+        if i.resumen_atencion:
+            with ui.card().classes("tarjeta w-full p-3").props("flat"):
+                ui.label("Resumen de la atención").classes("text-sm font-bold")
+                ui.label(i.resumen_atencion).classes("text-sm")
+        if i.evidencias:
+            ui.label("Evidencia fotográfica").classes("seccion-titulo")
+            with ui.row().classes("gap-3"):
+                for ev in i.evidencias:
+                    with ui.column().classes("gap-0 items-center"):
+                        ui.image(cont.almacen.url_publica(ev.ruta_archivo)).classes("w-40 h-28 rounded-lg") \
+                            .props("fit=cover")
+                        ui.label("Atención" if ev.tipo == "ATENCION" else "Reporte").classes("text-xs") \
+                            .style("color:var(--suave)")
+        mapa_puntual(cont.geo, i.ubicacion.latitud, i.ubicacion.longitud)
 
-    if i.resumen_atencion:
-        with ui.card().classes("tarjeta w-full p-3").props("flat"):
-            ui.label("Resumen de la atención").classes("text-sm font-bold")
-            ui.label(i.resumen_atencion).classes("text-sm")
+    def historial() -> None:
+        ui.label("Historial de estados").classes("seccion-titulo")
+        with ui.column().classes("linea gap-3"):
+            for h in i.historial:
+                with ui.element("div").classes("relative"):
+                    ui.element("div").classes("punto")
+                    with ui.row().classes("items-center gap-2"):
+                        chip_estado(h.estado_nuevo)
+                        ui.label(fmt_fecha(h.fecha)).classes("text-xs").style("color:var(--suave)")
+                        ui.label(f"por {h.usuario_nombre}").classes("text-xs").style("color:var(--suave)")
+                    if h.observacion:
+                        ui.label(h.observacion).classes("text-sm")
 
-    if i.evidencias:
-        ui.label("Evidencia fotográfica").classes("font-bold")
-        with ui.row().classes("gap-3"):
-            for ev in i.evidencias:
-                with ui.column().classes("gap-0 items-center"):
-                    ui.image(cont.almacen.url_publica(ev.ruta_archivo)).classes("w-40 h-28 rounded-lg") \
-                        .props("fit=cover")
-                    ui.label("Atención" if ev.tipo == "ATENCION" else "Reporte").classes("text-xs text-grey-7")
-
-    mapa_puntual(cont.geo, i.ubicacion.latitud, i.ubicacion.longitud)
-
-    ui.label("Historial de estados").classes("font-bold")
-    with ui.column().classes("linea gap-3"):
-        for h in i.historial:
-            with ui.element("div").classes("relative"):
-                ui.element("div").classes("punto")
-                with ui.row().classes("items-center gap-2"):
-                    chip_estado(h.estado_nuevo)
-                    ui.label(fmt_fecha(h.fecha)).classes("text-xs text-grey-7")
-                    ui.label(f"por {h.usuario_nombre}").classes("text-xs text-grey-7")
-                if h.observacion:
-                    ui.label(h.observacion).classes("text-sm")
-
-    _acciones(i, actor, al_cambiar)
+    if panel:
+        _acciones(i, actor, al_cambiar)
+        cuerpo()
+        historial()
+    else:
+        with ui.element("div").classes("detalle-grid"):
+            with ui.column().classes("gap-3 w-full"):
+                cuerpo()
+            with ui.column().classes("gap-3 w-full"):
+                historial()
+                _acciones(i, actor, al_cambiar)
 
 
 def _esc(texto: str) -> str:
@@ -172,15 +187,16 @@ def _esc(texto: str) -> str:
 
 
 def abrir_detalle(codigo: str, actor: Actor, al_cambiar: Callable[[], None] | None = None) -> None:
-    """Abre el detalle en un diálogo; tras cada acción se re-renderiza y avisa a la página."""
-    # El diálogo se crea en la raíz del cliente: si colgara de un contenedor ``@ui.refreshable``
+    """Abre el caso en un panel lateral que se desliza desde la derecha; tras cada acción se re-renderiza."""
+    # El panel se crea en la raíz del cliente: si colgara de un contenedor ``@ui.refreshable``
     # (p. ej. el listado), se destruiría al refrescar la tabla tras cambiar el estado del caso.
-    with context.client.content, ui.dialog().props("maximized=false") as dlg, \
-            ui.card().classes("w-[900px] max-w-[95vw] max-h-[92vh] overflow-auto gap-3"):
+    with context.client.content, ui.dialog().props(
+            'position=right transition-show="slide-left" transition-hide="slide-right"') as dlg, \
+            ui.card().classes("panel-lateral overflow-auto gap-3"):
         @ui.refreshable
         def contenido() -> None:
             try:
-                render_detalle(c().consultar_por_codigo.ejecutar(actor, codigo), actor, cambiado)
+                render_detalle(c().consultar_por_codigo.ejecutar(actor, codigo), actor, cambiado, panel=True)
             except Exception as e:  # noqa: BLE001
                 notificar_error(e)
 
@@ -189,7 +205,8 @@ def abrir_detalle(codigo: str, actor: Actor, al_cambiar: Callable[[], None] | No
             if al_cambiar:
                 al_cambiar()
 
-        with ui.row().classes("w-full justify-end"):
-            ui.button(icon="close", on_click=dlg.close).props("flat round dense")
+        with ui.row().classes("w-full items-center justify-between"):
+            ui.label("Detalle del caso").classes("seccion-titulo")
+            ui.button(icon="close", on_click=dlg.close).props('flat round dense aria-label="Cerrar detalle"')
         contenido()
     dlg.open()
